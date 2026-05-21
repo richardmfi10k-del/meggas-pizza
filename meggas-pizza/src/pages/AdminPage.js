@@ -1,17 +1,20 @@
 // src/pages/AdminPage.js
+// VERSIÓN ACTUALIZADA — incluye pestaña de Historial de pedidos
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
+import HistoryPage from "./HistoryPage";
 
 function fmt(n) { return "$" + Math.round(n).toLocaleString("es-CO"); }
 
 export default function AdminPage() {
   const { isAdmin, logout, flavors, sizes, config, saveFlavor, deleteFlavor, saveSize, saveConfig } = useApp();
   const navigate = useNavigate();
-  const [tab, setTab] = useState("sabores");
-  const [modal, setModal] = useState(null); // { type: 'flavor'|'size'|'config', data }
-  const [form, setForm] = useState({});
-  const [saving, setSaving] = useState(false);
+  const [tab, setTab]         = useState("historial");
+  const [modal, setModal]     = useState(null);
+  const [form, setForm]       = useState({});
+  const [saving, setSaving]   = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
 
   useEffect(() => {
@@ -22,12 +25,10 @@ export default function AdminPage() {
     setForm(flavor ? { ...flavor } : { id: "f" + Date.now(), name: "", ing: "", active: true });
     setModal("flavor");
   }
-
   function openSize(size) {
     setForm(size ? { ...size } : { id: "s" + Date.now(), label: "", porciones: "", price: "", order: sizes.length + 1 });
     setModal("size");
   }
-
   function openConfig() {
     setForm({ ...config });
     setModal("config");
@@ -36,8 +37,8 @@ export default function AdminPage() {
   async function save() {
     setSaving(true);
     try {
-      if (modal === "flavor") await saveFlavor({ ...form, price: undefined });
-      if (modal === "size") await saveSize({ ...form, price: Number(form.price) });
+      if (modal === "flavor") await saveFlavor({ ...form });
+      if (modal === "size")   await saveSize({ ...form, price: Number(form.price) });
       if (modal === "config") await saveConfig({ ...form, domicilio: Number(form.domicilio) });
       showSuccess("Guardado correctamente ✅");
       setModal(null);
@@ -60,6 +61,8 @@ export default function AdminPage() {
 
   if (!isAdmin) return null;
 
+  const TABS = ["historial", "sabores", "tamaños", "configuración"];
+
   return (
     <div className="page-wide">
       <div className="admin-nav">
@@ -67,21 +70,30 @@ export default function AdminPage() {
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <a href="/cocina" className="nav-link" style={{ fontSize: 12, opacity: 0.7 }}>Cocina</a>
           <a href="/" className="nav-link" style={{ fontSize: 12, opacity: 0.7 }}>Menú</a>
-          <button className="nav-link" onClick={() => { logout(); navigate("/admin/login"); }}>
-            Salir →
-          </button>
+          <button className="nav-link" onClick={() => { logout(); navigate("/admin/login"); }}>Salir →</button>
         </div>
       </div>
 
-      {successMsg && <div className="toast" style={{ background: "#f0fff4", borderColor: "#b7e1be", color: "#1a7a31" }}>{successMsg}</div>}
+      {successMsg && (
+        <div className="toast" style={{ background: "#f0fff4", borderColor: "#b7e1be", color: "#1a7a31", marginBottom: "1rem" }}>
+          {successMsg}
+        </div>
+      )}
 
       <div className="admin-tabs">
-        {["sabores", "tamaños", "configuración"].map(t => (
+        {TABS.map(t => (
           <button key={t} className={`admin-tab${tab === t ? " active" : ""}`} onClick={() => setTab(t)}>
+            {t === "historial"      && "📊 "}
+            {t === "sabores"        && "🍕 "}
+            {t === "tamaños"        && "📏 "}
+            {t === "configuración"  && "⚙️ "}
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
+
+      {/* ── HISTORIAL ── */}
+      {tab === "historial" && <HistoryPage />}
 
       {/* ── SABORES ── */}
       {tab === "sabores" && (
@@ -138,7 +150,7 @@ export default function AdminPage() {
           <div className="form-row full" style={{ marginBottom: 10 }}>
             <div className="form-group">
               <label>Nombre del negocio</label>
-              <input value={config.negocio} readOnly style={{ opacity: 0.6, cursor: "not-allowed" }} />
+              <input value={config.negocio} readOnly style={{ opacity: 0.6 }} />
             </div>
           </div>
           <div className="form-row">
@@ -174,12 +186,8 @@ export default function AdminPage() {
             </div>
             <div className="form-group" style={{ marginBottom: 10 }}>
               <label>Ingredientes *</label>
-              <textarea
-                value={form.ing}
-                onChange={e => setForm({ ...form, ing: e.target.value })}
-                placeholder="Ej. Tocineta, maíz, jalapeño, tostacós"
-                style={{ minHeight: 70, resize: "vertical" }}
-              />
+              <textarea value={form.ing} onChange={e => setForm({ ...form, ing: e.target.value })}
+                placeholder="Ej. Tocineta, maíz, jalapeño, tostacós" style={{ minHeight: 70, resize: "vertical" }} />
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: "0.75rem" }}>
               <button className="btn-primary" style={{ flex: 1 }} onClick={save} disabled={saving}>
@@ -208,12 +216,7 @@ export default function AdminPage() {
             </div>
             <div className="form-group" style={{ marginBottom: 10 }}>
               <label>Precio (sin puntos) *</label>
-              <input
-                type="number"
-                value={form.price}
-                onChange={e => setForm({ ...form, price: e.target.value })}
-                placeholder="Ej. 55000"
-              />
+              <input type="number" value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} placeholder="Ej. 55000" />
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: "0.75rem" }}>
               <button className="btn-primary" style={{ flex: 1 }} onClick={save} disabled={saving}>
@@ -260,3 +263,4 @@ export default function AdminPage() {
     </div>
   );
 }
+
