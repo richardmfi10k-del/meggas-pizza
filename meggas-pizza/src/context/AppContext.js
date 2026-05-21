@@ -1,23 +1,31 @@
 // src/context/AppContext.js
+// VERSIÓN ACTUALIZADA — incluye notificaciones push
+
 import React, { createContext, useContext, useState, useEffect } from "react";
 import {
   collection, doc, onSnapshot, setDoc, updateDoc,
   addDoc, serverTimestamp, getDocs, writeBatch
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, requestNotificationPermission, onForegroundMessage } from "../firebase";
 import { defaultSizes, defaultFlavors, defaultConfig } from "../defaultData";
 
 const AppContext = createContext();
 
-export function AppProvider({ children }) {
-  const [sizes, setSizes]     = useState(defaultSizes);
-  const [flavors, setFlavors] = useState(defaultFlavors);
-  const [config, setConfig]   = useState(defaultConfig);
-  const [orders, setOrders]   = useState([]);
-  const [loaded, setLoaded]   = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+// ⚠️ Reemplaza este valor con tu VAPID Key de Firebase
+// La obtienes en: Firebase Console → Configuración del proyecto
+// → Cloud Messaging → Certificados push web → Generar par de claves
+const VAPID_KEY = "BC8Rdsd9b3YbrmmJYVI59O2KiHlBLb_h4P8dt5Hry8DDpfvstAoifmOYeqKlf14WvvbC-3g-QxXxrfmrjcn2Wak";
 
-  // Seed initial data if Firebase collections are empty
+export function AppProvider({ children }) {
+  const [sizes, setSizes]       = useState(defaultSizes);
+  const [flavors, setFlavors]   = useState(defaultFlavors);
+  const [config, setConfig]     = useState(defaultConfig);
+  const [orders, setOrders]     = useState([]);
+  const [loaded, setLoaded]     = useState(false);
+  const [isAdmin, setIsAdmin]   = useState(false);
+  const [fcmToken, setFcmToken] = useState(null);
+  const [notifEnabled, setNotifEnabled] = useState(false);
+
   async function seedIfEmpty() {
     try {
       const snap = await getDocs(collection(db, "sizes"));
@@ -29,13 +37,51 @@ export function AppProvider({ children }) {
         await setDoc(doc(db, "config", "main"), defaultConfig);
       }
     } catch (e) {
-      console.log("Using local data (Firebase not configured yet)");
+      console.log("Usando datos locales");
+    }
+  }
+
+  // Activa notificaciones push en este dispositivo
+  async function enableNotifications() {
+    try {
+      const token = await requestNotificationPermission(VAPID_KEY);
+      if (token) {
+        setFcmToken(token);
+        setNotifEnabled(true);
+        // Guarda el token en Firebase para poder enviar notificaciones
+        await setDoc(doc(db, "fcm_tokens", token), {
+          token,
+          device: navigator.userAgent,
+          createdAt: serverTimestamp()
+        });
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error("Error activando notificaciones:", e);
+      return false;
+    }
+  }
+
+  // Envía notificación a todos los tokens guardados cuando llega un pedido
+  async function notifyNewOrder(order) {
+    try {
+      // Guarda el pedido en una cola de notificaciones
+      // Firebase Functions lo envía (o puedes usar un webhook)
+      await addDoc(collection(db, "notification_queue"), {
+        title: "🍕 Nuevo pedido — Megga's Pizza",
+        body: `${order.producto} · ${order.cliente}`,
+        url: "/cocina",
+        createdAt: serverTimestamp(),
+        sent: false
+      });
+    } catch (e) {
+      console.log("Notificación en cola no disponible, usando sonido local");
     }
   }
 
   useEffect(() => {
     seedIfEmpty();
-
     const unsubs = [];
 
     try {
@@ -60,8 +106,15 @@ export function AppProvider({ children }) {
           .sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
         setOrders(data);
       }));
+
+      // Escucha mensajes cuando la app está ABIERTA
+      onForegroundMessage((payload) => {
+        console.log("Mensaje en primer plano:", payload);
+        // El componente KitchenPage maneja el sonido y toast visual
+      });
+
     } catch (e) {
-      console.log("Firebase not connected, running in demo mode");
+      console.log("Firebase no conectado, modo demo");
     }
 
     setLoaded(true);
@@ -75,10 +128,15 @@ export function AppProvider({ children }) {
         status: "nuevo",
         createdAt: serverTimestamp(),
       });
+      await notifyNewOrder(orderData);
       return ref.id;
     } catch (e) {
-      // Demo mode: add locally
-      const localOrder = { ...orderData, id: "demo-" + Date.now(), status: "nuevo", createdAt: { seconds: Date.now() / 1000 } };
+      const localOrder = {
+        ...orderData,
+        id: "demo-" + Date.now(),
+        status: "nuevo",
+        createdAt: { seconds: Date.now() / 1000 }
+      };
       setOrders(prev => [...prev, localOrder]);
       return localOrder.id;
     }
@@ -131,21 +189,18 @@ export function AppProvider({ children }) {
   }
 
   function login(password) {
-    if (password === config.adminPassword) {
-      setIsAdmin(true);
-      return true;
-    }
+    if (password === config.adminPassword) { setIsAdmin(true); return true; }
     return false;
   }
-
   function logout() { setIsAdmin(false); }
 
   return (
     <AppContext.Provider value={{
       sizes, flavors, config, orders, loaded, isAdmin,
+      fcmToken, notifEnabled,
       createOrder, updateOrderStatus,
       saveFlavor, deleteFlavor, saveSize, saveConfig,
-      login, logout
+      login, logout, enableNotifications
     }}>
       {children}
     </AppContext.Provider>
