@@ -1,205 +1,139 @@
-// src/context/AppContext.js
-// VERSIÓN ACTUALIZADA — incluye notificaciones push
-
+// src/context/AppContext.js — VERSIÓN 2
 import React, { createContext, useContext, useState, useEffect } from "react";
 import {
   collection, doc, onSnapshot, setDoc, updateDoc,
   addDoc, serverTimestamp, getDocs, writeBatch
 } from "firebase/firestore";
 import { db, requestNotificationPermission, onForegroundMessage } from "../firebase";
-import { defaultSizes, defaultFlavors, defaultConfig } from "../defaultData";
+import { defaultSizes, defaultCategories, defaultProducts, defaultConfig } from "../defaultData";
 
 const AppContext = createContext();
-
-// ⚠️ Reemplaza este valor con tu VAPID Key de Firebase
-// La obtienes en: Firebase Console → Configuración del proyecto
-// → Cloud Messaging → Certificados push web → Generar par de claves
-const VAPID_KEY = "BC8Rdsd9b3YbrmmJYVI59O2KiHlBLb_h4P8dt5Hry8DDpfvstAoifmOYeqKlf14WvvbC-3g-QxXxrfmrjcn2Wak";
+const VAPID_KEY = "TU_VAPID_KEY_AQUI"; // ← mismo que antes
 
 export function AppProvider({ children }) {
-  const [sizes, setSizes]       = useState(defaultSizes);
-  const [flavors, setFlavors]   = useState(defaultFlavors);
-  const [config, setConfig]     = useState(defaultConfig);
-  const [orders, setOrders]     = useState([]);
-  const [loaded, setLoaded]     = useState(false);
-  const [isAdmin, setIsAdmin]   = useState(false);
-  const [fcmToken, setFcmToken] = useState(null);
+  const [sizes, setSizes]           = useState(defaultSizes);
+  const [categories, setCategories] = useState(defaultCategories);
+  const [products, setProducts]     = useState(defaultProducts);
+  const [config, setConfig]         = useState(defaultConfig);
+  const [orders, setOrders]         = useState([]);
+  const [loaded, setLoaded]         = useState(false);
+  const [isAdmin, setIsAdmin]       = useState(false);
   const [notifEnabled, setNotifEnabled] = useState(false);
 
   async function seedIfEmpty() {
     try {
-      const snap = await getDocs(collection(db, "sizes"));
+      const snap = await getDocs(collection(db, "categories"));
       if (snap.empty) {
         const batch = writeBatch(db);
+        defaultCategories.forEach(c => batch.set(doc(db, "categories", c.id), c));
+        defaultProducts.forEach(p => batch.set(doc(db, "products", p.id), p));
         defaultSizes.forEach(s => batch.set(doc(db, "sizes", s.id), s));
-        defaultFlavors.forEach(f => batch.set(doc(db, "flavors", f.id), f));
         await batch.commit();
         await setDoc(doc(db, "config", "main"), defaultConfig);
       }
-    } catch (e) {
-      console.log("Usando datos locales");
-    }
+    } catch (e) { console.log("Usando datos locales"); }
   }
 
-  // Activa notificaciones push en este dispositivo
   async function enableNotifications() {
     try {
       const token = await requestNotificationPermission(VAPID_KEY);
       if (token) {
-        setFcmToken(token);
         setNotifEnabled(true);
-        // Guarda el token en Firebase para poder enviar notificaciones
-        await setDoc(doc(db, "fcm_tokens", token), {
-          token,
-          device: navigator.userAgent,
-          createdAt: serverTimestamp()
-        });
+        await setDoc(doc(db, "fcm_tokens", token), { token, device: navigator.userAgent, createdAt: serverTimestamp() });
         return true;
       }
       return false;
-    } catch (e) {
-      console.error("Error activando notificaciones:", e);
-      return false;
-    }
-  }
-
-  // Envía notificación a todos los tokens guardados cuando llega un pedido
-  async function notifyNewOrder(order) {
-    try {
-      // Guarda el pedido en una cola de notificaciones
-      // Firebase Functions lo envía (o puedes usar un webhook)
-      await addDoc(collection(db, "notification_queue"), {
-        title: "🍕 Nuevo pedido — Megga's Pizza",
-        body: `${order.producto} · ${order.cliente}`,
-        url: "/cocina",
-        createdAt: serverTimestamp(),
-        sent: false
-      });
-    } catch (e) {
-      console.log("Notificación en cola no disponible, usando sonido local");
-    }
+    } catch (e) { return false; }
   }
 
   useEffect(() => {
     seedIfEmpty();
     const unsubs = [];
-
     try {
       unsubs.push(onSnapshot(collection(db, "sizes"), snap => {
-        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        if (data.length) setSizes(data.sort((a, b) => a.order - b.order));
+        const d = snap.docs.map(x => ({ id: x.id, ...x.data() }));
+        if (d.length) setSizes(d.sort((a, b) => a.order - b.order));
       }));
-
-      unsubs.push(onSnapshot(collection(db, "flavors"), snap => {
-        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        if (data.length) setFlavors(data.filter(f => f.active));
+      unsubs.push(onSnapshot(collection(db, "categories"), snap => {
+        const d = snap.docs.map(x => ({ id: x.id, ...x.data() })).filter(c => c.active);
+        if (d.length) setCategories(d.sort((a, b) => a.order - b.order));
       }));
-
+      unsubs.push(onSnapshot(collection(db, "products"), snap => {
+        const d = snap.docs.map(x => ({ id: x.id, ...x.data() })).filter(p => p.active);
+        if (d.length) setProducts(d.sort((a, b) => a.order - b.order));
+      }));
       unsubs.push(onSnapshot(doc(db, "config", "main"), snap => {
         if (snap.exists()) setConfig(snap.data());
       }));
-
       unsubs.push(onSnapshot(collection(db, "orders"), snap => {
-        const data = snap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
+        const d = snap.docs.map(x => ({ id: x.id, ...x.data() }))
           .filter(o => o.status !== "entregado")
           .sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
-        setOrders(data);
+        setOrders(d);
       }));
-
-      // Escucha mensajes cuando la app está ABIERTA
-      onForegroundMessage((payload) => {
-        console.log("Mensaje en primer plano:", payload);
-        // El componente KitchenPage maneja el sonido y toast visual
-      });
-
-    } catch (e) {
-      console.log("Firebase no conectado, modo demo");
-    }
-
+      onForegroundMessage(() => {});
+    } catch (e) { console.log("Modo demo"); }
     setLoaded(true);
     return () => unsubs.forEach(u => u());
   }, []);
 
   async function createOrder(orderData) {
     try {
-      const ref = await addDoc(collection(db, "orders"), {
-        ...orderData,
-        status: "nuevo",
-        createdAt: serverTimestamp(),
-      });
-      await notifyNewOrder(orderData);
+      const ref = await addDoc(collection(db, "orders"), { ...orderData, status: "nuevo", createdAt: serverTimestamp() });
       return ref.id;
     } catch (e) {
-      const localOrder = {
-        ...orderData,
-        id: "demo-" + Date.now(),
-        status: "nuevo",
-        createdAt: { seconds: Date.now() / 1000 }
-      };
-      setOrders(prev => [...prev, localOrder]);
-      return localOrder.id;
+      const o = { ...orderData, id: "demo-" + Date.now(), status: "nuevo", createdAt: { seconds: Date.now() / 1000 } };
+      setOrders(prev => [...prev, o]);
+      return o.id;
     }
   }
 
-  async function updateOrderStatus(orderId, status) {
-    try {
-      await updateDoc(doc(db, "orders", orderId), { status });
-    } catch (e) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
-    }
+  async function updateOrderStatus(id, status) {
+    try { await updateDoc(doc(db, "orders", id), { status }); }
+    catch (e) { setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o)); }
   }
 
-  async function saveFlavor(flavor) {
-    try {
-      await setDoc(doc(db, "flavors", flavor.id), flavor);
-    } catch (e) {
-      setFlavors(prev => {
-        const exists = prev.find(f => f.id === flavor.id);
-        return exists ? prev.map(f => f.id === flavor.id ? flavor : f) : [...prev, flavor];
-      });
-    }
+  // ── Categorías ──
+  async function saveCategory(cat) {
+    try { await setDoc(doc(db, "categories", cat.id), cat); }
+    catch (e) { setCategories(prev => { const ex = prev.find(c => c.id === cat.id); return ex ? prev.map(c => c.id === cat.id ? cat : c) : [...prev, cat]; }); }
+  }
+  async function deleteCategory(id) {
+    try { await updateDoc(doc(db, "categories", id), { active: false }); }
+    catch (e) { setCategories(prev => prev.filter(c => c.id !== id)); }
   }
 
-  async function deleteFlavor(id) {
-    try {
-      await updateDoc(doc(db, "flavors", id), { active: false });
-    } catch (e) {
-      setFlavors(prev => prev.filter(f => f.id !== id));
-    }
+  // ── Productos ──
+  async function saveProduct(product) {
+    try { await setDoc(doc(db, "products", product.id), product); }
+    catch (e) { setProducts(prev => { const ex = prev.find(p => p.id === product.id); return ex ? prev.map(p => p.id === product.id ? product : p) : [...prev, product]; }); }
+  }
+  async function deleteProduct(id) {
+    try { await updateDoc(doc(db, "products", id), { active: false }); }
+    catch (e) { setProducts(prev => prev.filter(p => p.id !== id)); }
   }
 
+  // ── Tamaños ──
   async function saveSize(size) {
-    try {
-      await setDoc(doc(db, "sizes", size.id), size);
-    } catch (e) {
-      setSizes(prev => {
-        const exists = prev.find(s => s.id === size.id);
-        return exists ? prev.map(s => s.id === size.id ? size : s) : [...prev, size];
-      });
-    }
+    try { await setDoc(doc(db, "sizes", size.id), size); }
+    catch (e) { setSizes(prev => { const ex = prev.find(s => s.id === size.id); return ex ? prev.map(s => s.id === size.id ? size : s) : [...prev, size]; }); }
   }
 
   async function saveConfig(newConfig) {
-    try {
-      await setDoc(doc(db, "config", "main"), newConfig);
-    } catch (e) {
-      setConfig(newConfig);
-    }
+    try { await setDoc(doc(db, "config", "main"), newConfig); }
+    catch (e) { setConfig(newConfig); }
   }
 
-  function login(password) {
-    if (password === config.adminPassword) { setIsAdmin(true); return true; }
-    return false;
-  }
+  function login(pw) { if (pw === config.adminPassword) { setIsAdmin(true); return true; } return false; }
   function logout() { setIsAdmin(false); }
 
   return (
     <AppContext.Provider value={{
-      sizes, flavors, config, orders, loaded, isAdmin,
-      fcmToken, notifEnabled,
+      sizes, categories, products, config, orders, loaded, isAdmin, notifEnabled,
       createOrder, updateOrderStatus,
-      saveFlavor, deleteFlavor, saveSize, saveConfig,
+      saveCategory, deleteCategory,
+      saveProduct, deleteProduct,
+      saveSize, saveConfig,
       login, logout, enableNotifications
     }}>
       {children}
