@@ -1,22 +1,130 @@
-// src/pages/MenuPage.js — VERSIÓN 3 — Categorías + Carrito + Mitad y Mitad
-import React, { useState } from "react";
+// src/pages/MenuPage.js — MEJORA 3: Rediseño visual estilo Rappi/iFood
+import React, { useState, useRef, useEffect } from "react";
 import { useApp } from "../context/AppContext";
 
 function fmt(n) { return "$" + Math.round(n).toLocaleString("es-CO"); }
+function padOrder(n) { return String(n).padStart(4, "0"); }
 
-// ── Componente: Selector de pizza ────────────────────────────────────────────
-function PizzaSelector({ sizes, flavors, onAdd }) {
+// ── Imagen con fallback ────────────────────────────────────────────────────────
+function ImgWithFallback({ src, alt, fallbackEmoji, className, style }) {
+  const [err, setErr] = useState(false);
+  if (!src || err) {
+    return (
+      <div className={className} style={{ ...style, display: "flex", alignItems: "center", justifyContent: "center", background: "#e8e8e8", fontSize: 28 }}>
+        {fallbackEmoji || "🍽️"}
+      </div>
+    );
+  }
+  return <img src={src} alt={alt} className={className} style={style} onError={() => setErr(true)} />;
+}
+
+// ── Modal de variantes (idéntico al actual) ────────────────────────────────────
+function VariantModal({ product, variants, onConfirm, onClose }) {
+  const applicable = variants.filter(v =>
+    v.active !== false &&
+    v.categoryId === product.categoryId &&
+    (v.productId === product.id || v.productId === null)
+  );
+
+  const [selections, setSelections] = useState(() => {
+    const init = {};
+    applicable.forEach(v => { init[v.id] = null; });
+    return init;
+  });
+
+  // Si no hay variantes, agrega directo
+  useEffect(() => {
+    if (applicable.length === 0) {
+      onConfirm({
+        id: `${product.id}-${Date.now()}`,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        qty: 1,
+        categoryId: product.categoryId,
+      });
+    }
+  }, []); // eslint-disable-line
+
+  if (applicable.length === 0) return null;
+
+  function select(variantId, optionLabel) {
+    setSelections(prev => ({ ...prev, [variantId]: optionLabel }));
+  }
+
+  function handleConfirm() {
+    for (const v of applicable) {
+      if (v.required && !selections[v.id]) {
+        alert(`Por favor elige: ${v.label}`);
+        return;
+      }
+    }
+    const chosen = applicable.map(v => selections[v.id]).filter(Boolean);
+    const fullName = chosen.length ? `${product.name} — ${chosen.join(", ")}` : product.name;
+    onConfirm({
+      id: `${product.id}-${Date.now()}`,
+      name: fullName,
+      description: product.description,
+      price: product.price,
+      qty: 1,
+      categoryId: product.categoryId,
+      variants: selections,
+    });
+  }
+
+  return (
+    <div className="vm-overlay" onClick={onClose}>
+      <div className="vm-sheet" onClick={e => e.stopPropagation()}>
+        <div className="vm-handle" />
+        <div className="vm-header">
+          <div>
+            <div className="vm-product-name">{product.name}</div>
+            {product.description && <div className="vm-product-desc">{product.description}</div>}
+            <div className="vm-product-price">{fmt(product.price)}</div>
+          </div>
+          <button className="vm-close" onClick={onClose}>✕</button>
+        </div>
+
+        {applicable.map(v => (
+          <div key={v.id} className="vm-group">
+            <div className="vm-group-label">
+              {v.label}
+              {v.required
+                ? <span className="vm-required">* obligatorio</span>
+                : <span className="vm-optional">opcional</span>}
+            </div>
+            <div className="vm-options">
+              {v.options.filter(o => o.active !== false).map(opt => {
+                const sel = selections[v.id] === opt.label;
+                return (
+                  <button key={opt.id} className={`vm-option${sel ? " sel" : ""}`} onClick={() => select(v.id, opt.label)}>
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        <button className="vm-confirm" onClick={handleConfirm}>
+          + Agregar · {fmt(product.price)}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Selector de pizza ─────────────────────────────────────────────────────────
+function PizzaModal({ sizes, flavors, onAdd, onClose }) {
   const [selSize, setSelSize]       = useState(sizes[0]?.id || null);
   const [selFlavor1, setSelFlavor1] = useState(null);
   const [selFlavor2, setSelFlavor2] = useState(null);
   const [isHalf, setIsHalf]         = useState(false);
   const [qty, setQty]               = useState(1);
-
   const size = sizes.find(s => s.id === selSize);
-  const allowHalf = size?.allowHalf || false;
 
-  function handleAddPizza() {
-    if (!selSize || !selFlavor1) return;
+  function handleAdd() {
+    if (!selFlavor1) return;
     if (isHalf && !selFlavor2) return;
     const f1 = flavors.find(f => f.id === selFlavor1);
     const f2 = isHalf ? flavors.find(f => f.id === selFlavor2) : null;
@@ -26,317 +134,444 @@ function PizzaSelector({ sizes, flavors, onAdd }) {
     const description = isHalf
       ? `Mitad: ${f1.description} | Mitad: ${f2.description}`
       : f1.description;
-    onAdd({ id: `pizza-${Date.now()}`, name, description, price: size.price, qty, categoryId: "pizzas", sizeId: selSize });
-    setSelFlavor1(null); setSelFlavor2(null); setIsHalf(false); setQty(1);
+    onAdd({ id: `pizza-${Date.now()}`, name, description, price: size.price, qty, categoryId: "pizzas" });
+    onClose();
   }
 
   return (
-    <div>
-      {/* Tamaños */}
-      <div className="section-label">Elige el tamaño</div>
-      <div className="sizes-grid" style={{ marginBottom: "0.25rem" }}>
-        {sizes.map(s => (
-          <div key={s.id} className={`size-card${selSize === s.id ? " sel" : ""}`} onClick={() => { setSelSize(s.id); setIsHalf(false); setSelFlavor2(null); }}>
-            <div className="sz-name">{s.label}</div>
-            <div className="sz-price">{fmt(s.price)}</div>
-            <div className="sz-pcs">{s.porciones}</div>
-            {s.allowHalf && <div style={{ fontSize: 10, color: "#1a7a31", marginTop: 2 }}>½ y ½ disponible</div>}
-          </div>
-        ))}
-      </div>
+    <div className="vm-overlay" onClick={onClose}>
+      <div className="vm-sheet pizza-sheet" onClick={e => e.stopPropagation()}>
+        <div className="vm-handle" />
+        <div className="pizza-modal-header">
+          <span>🍕 Personaliza tu pizza</span>
+          <button className="vm-close" onClick={onClose}>✕</button>
+        </div>
 
-      {/* Toggle mitad y mitad */}
-      {allowHalf && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "10px 0", padding: "10px 14px", background: "#f0fff4", borderRadius: 10, border: "1px solid #b7e1be" }}>
-          <div
-            onClick={() => { setIsHalf(!isHalf); setSelFlavor2(null); }}
-            style={{ width: 36, height: 20, borderRadius: 10, background: isHalf ? "#1a7a31" : "#ccc", position: "relative", cursor: "pointer", flexShrink: 0, transition: "all 0.2s" }}
-          >
-            <div style={{ position: "absolute", top: 3, left: isHalf ? 18 : 3, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "all 0.2s" }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#1a7a31" }}>Mitad y mitad 🍕</div>
-            <div style={{ fontSize: 11, color: "#2d6a4f" }}>Elige 2 sabores diferentes, mismo precio</div>
+        {/* Tamaños */}
+        <div className="vm-group">
+          <div className="vm-group-label">Tamaño <span className="vm-required">* obligatorio</span></div>
+          <div className="sizes-grid">
+            {sizes.map(s => (
+              <div key={s.id} className={`size-card${selSize === s.id ? " sel" : ""}`}
+                onClick={() => { setSelSize(s.id); setIsHalf(false); setSelFlavor2(null); }}>
+                <div className="sz-name">{s.label}</div>
+                <div className="sz-price">{fmt(s.price)}</div>
+                <div className="sz-pcs">{s.porciones}</div>
+                {s.allowHalf && <div style={{ fontSize: 10, color: "#1a7a31", marginTop: 2 }}>½ y ½</div>}
+              </div>
+            ))}
           </div>
         </div>
-      )}
 
-      {/* Sabores */}
-      <div className="section-label">{isHalf ? "Sabor — Primera mitad" : "Elige el sabor"}</div>
-      <div className="flavors-grid" style={{ marginBottom: "0.5rem" }}>
-        {flavors.map(f => (
-          <div key={f.id} className={`flavor-card${selFlavor1 === f.id ? " sel" : ""}`}
-            onClick={() => setSelFlavor1(f.id)}>
-            <div className="flavor-name">{f.name}</div>
-            <div className="flavor-ing">{f.description}</div>
+        {/* Toggle mitad y mitad */}
+        {size?.allowHalf && (
+          <div className="half-toggle" onClick={() => { setIsHalf(!isHalf); setSelFlavor2(null); }}>
+            <div className={`toggle-track${isHalf ? " on" : ""}`}>
+              <div className="toggle-thumb" />
+            </div>
+            <div>
+              <div className="half-toggle-title">Mitad y mitad 🍕</div>
+              <div className="half-toggle-sub">2 sabores diferentes, mismo precio</div>
+            </div>
           </div>
-        ))}
-      </div>
+        )}
 
-      {/* Segunda mitad */}
-      {isHalf && (
-        <>
-          <div className="section-label">Sabor — Segunda mitad</div>
-          <div className="flavors-grid" style={{ marginBottom: "0.5rem" }}>
-            {flavors.filter(f => f.id !== selFlavor1).map(f => (
-              <div key={f.id} className={`flavor-card${selFlavor2 === f.id ? " sel" : ""}`}
-                onClick={() => setSelFlavor2(f.id)}>
+        {/* Sabores */}
+        <div className="vm-group">
+          <div className="vm-group-label">
+            {isHalf ? "Primera mitad" : "Sabor"}
+            <span className="vm-required">* obligatorio</span>
+          </div>
+          <div className="flavors-grid">
+            {flavors.map(f => (
+              <div key={f.id} className={`flavor-card${selFlavor1 === f.id ? " sel" : ""}`} onClick={() => setSelFlavor1(f.id)}>
                 <div className="flavor-name">{f.name}</div>
                 <div className="flavor-ing">{f.description}</div>
               </div>
             ))}
           </div>
-        </>
-      )}
-
-      {/* Cantidad + Agregar */}
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f7f7f7", borderRadius: 10, padding: "6px 12px" }}>
-          <button onClick={() => setQty(q => Math.max(1, q - 1))} style={{ border: "none", background: "none", fontSize: 18, cursor: "pointer", color: "#C0000A", fontWeight: 700 }}>−</button>
-          <span style={{ fontWeight: 700, fontSize: 15, minWidth: 20, textAlign: "center" }}>{qty}</span>
-          <button onClick={() => setQty(q => q + 1)} style={{ border: "none", background: "none", fontSize: 18, cursor: "pointer", color: "#C0000A", fontWeight: 700 }}>+</button>
         </div>
-        <button
-          className="btn-primary"
-          style={{ flex: 1 }}
-          onClick={handleAddPizza}
-          disabled={!selFlavor1 || (isHalf && !selFlavor2)}
-        >
-          + Agregar al pedido · {fmt((size?.price || 0) * qty)}
-        </button>
+
+        {isHalf && (
+          <div className="vm-group">
+            <div className="vm-group-label">Segunda mitad <span className="vm-required">* obligatorio</span></div>
+            <div className="flavors-grid">
+              {flavors.filter(f => f.id !== selFlavor1).map(f => (
+                <div key={f.id} className={`flavor-card${selFlavor2 === f.id ? " sel" : ""}`} onClick={() => setSelFlavor2(f.id)}>
+                  <div className="flavor-name">{f.name}</div>
+                  <div className="flavor-ing">{f.description}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Cantidad + botón */}
+        <div className="pizza-footer">
+          <div className="qty-control">
+            <button onClick={() => setQty(q => Math.max(1, q - 1))}>−</button>
+            <span>{qty}</span>
+            <button onClick={() => setQty(q => q + 1)}>+</button>
+          </div>
+          <button className="vm-confirm" style={{ flex: 1 }} onClick={handleAdd}
+            disabled={!selFlavor1 || (isHalf && !selFlavor2)}>
+            + Agregar · {fmt((size?.price || 0) * qty)}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Componente: Selector de producto simple ───────────────────────────────────
-function SimpleProducts({ products, onAdd }) {
-  return (
-    <div style={{ display: "grid", gap: 8 }}>
-      {products.map(p => (
-        <div key={p.id} style={{ background: "#fff", border: "1px solid #eee", borderRadius: 10, padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{p.name}</div>
-            <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>{p.description}</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <div style={{ fontWeight: 700, color: "#C0000A", fontSize: 15 }}>{fmt(p.price)}</div>
-            <button
-              onClick={() => onAdd({ id: `${p.id}-${Date.now()}`, name: p.name, description: p.description, price: p.price, qty: 1, categoryId: p.categoryId })}
-              style={{ background: "#C0000A", color: "#FFE600", border: "none", borderRadius: 8, width: 32, height: 32, fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}
-            >+</button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Componente: Carrito ───────────────────────────────────────────────────────
-function Cart({ items, onRemove, onChangeQty, domicilio }) {
+// ── Bottom sheet del carrito ───────────────────────────────────────────────────
+function CartSheet({ items, onRemove, onChangeQty, domicilio, config, onSubmit, loading, onClose }) {
+  const [form, setForm] = useState({ nombre: "", direccion: "", telefono: "", pago: "", nota: "" });
+  const [error, setError] = useState("");
   const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
-  if (items.length === 0) return (
-    <div style={{ textAlign: "center", padding: "1.5rem", color: "#aaa", fontSize: 13 }}>
-      Tu carrito está vacío 🛒
-    </div>
-  );
+  const total    = subtotal + (domicilio || 0);
+
+  async function handleSubmit() {
+    if (!form.nombre || !form.direccion || !form.telefono || !form.pago) {
+      setError("Completa todos los campos"); return;
+    }
+    setError("");
+    await onSubmit(form, total);
+  }
+
   return (
-    <div>
-      {items.map(item => (
-        <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid #f0f0f0" }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>{item.name}</div>
-            <div style={{ fontSize: 11, color: "#999" }}>{item.description}</div>
+    <div className="cs-overlay" onClick={onClose}>
+      <div className="cs-sheet" onClick={e => e.stopPropagation()}>
+        <div className="vm-handle" />
+        <div className="cs-header">
+          <span className="cs-title">Tu pedido</span>
+          <button className="vm-close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="cs-items">
+          {items.map(item => (
+            <div key={item.id} className="cs-item">
+              <div className="cs-item-info">
+                <span className="cs-item-name">{item.name}</span>
+              </div>
+              <div className="cs-item-controls">
+                <button onClick={() => onChangeQty(item.id, item.qty - 1)}>−</button>
+                <span>{item.qty}</span>
+                <button onClick={() => onChangeQty(item.id, item.qty + 1)}>+</button>
+              </div>
+              <span className="cs-item-price">{fmt(item.price * item.qty)}</span>
+              <button className="cs-item-remove" onClick={() => onRemove(item.id)}>✕</button>
+            </div>
+          ))}
+        </div>
+
+        <div className="cs-totals">
+          <div className="cs-total-row"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
+          <div className="cs-total-row"><span>Domicilio</span><span>{fmt(domicilio || 0)}</span></div>
+          <div className="cs-total-row grand"><span>Total</span><span>{fmt(total)}</span></div>
+        </div>
+
+        <div className="cs-form">
+          <div className="cs-form-title">Datos del domicilio</div>
+          <input className="cs-input" placeholder="Tu nombre *" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} />
+          <input className="cs-input" placeholder="Dirección (barrio, calle y número) *" value={form.direccion} onChange={e => setForm({ ...form, direccion: e.target.value })} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <input className="cs-input" placeholder="Teléfono *" value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} />
+            <select className="cs-input" value={form.pago} onChange={e => setForm({ ...form, pago: e.target.value })}>
+              <option value="">Pago *</option>
+              <option>Efectivo</option><option>Nequi</option><option>Daviplata</option><option>Tarjeta</option>
+            </select>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <button onClick={() => onChangeQty(item.id, item.qty - 1)} style={{ border: "1px solid #eee", background: "#fff", borderRadius: 6, width: 24, height: 24, cursor: "pointer", fontSize: 14, fontWeight: 700, color: "#C0000A" }}>−</button>
-            <span style={{ fontWeight: 700, fontSize: 13, minWidth: 16, textAlign: "center" }}>{item.qty}</span>
-            <button onClick={() => onChangeQty(item.id, item.qty + 1)} style={{ border: "1px solid #eee", background: "#fff", borderRadius: 6, width: 24, height: 24, cursor: "pointer", fontSize: 14, fontWeight: 700, color: "#C0000A" }}>+</button>
-          </div>
-          <div style={{ fontWeight: 700, color: "#C0000A", fontSize: 13, minWidth: 60, textAlign: "right" }}>{fmt(item.price * item.qty)}</div>
-          <button onClick={() => onRemove(item.id)} style={{ border: "none", background: "none", cursor: "pointer", color: "#ccc", fontSize: 16, padding: 0 }}>✕</button>
-        </div>
-      ))}
-      <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #eee" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#666", marginBottom: 4 }}>
-          <span>Subtotal</span><span>{fmt(subtotal)}</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#666", marginBottom: 4 }}>
-          <span>Domicilio</span><span>{fmt(domicilio)}</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700, color: "#C0000A", marginTop: 6 }}>
-          <span>Total</span><span>{fmt(subtotal + domicilio)}</span>
+          <input className="cs-input" placeholder="Nota (opcional)" value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} />
+          {error && <div className="toast" style={{ marginBottom: 0 }}>⚠️ {error}</div>}
+          <button className="btn-primary" onClick={handleSubmit} disabled={loading} style={{ marginTop: 4 }}>
+            {loading ? "Enviando..." : `🍕 Enviar pedido · ${fmt(total)}`}
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Página principal ──────────────────────────────────────────────────────────
+// ── Pantalla de confirmación ───────────────────────────────────────────────────
+function ConfirmScreen({ orderResult, cartItems, cartTotal, form, config, onReset }) {
+  return (
+    <div className="menu-bg" style={{ minHeight: "100vh" }}>
+      <div className="menu-page">
+        {/* Header simple */}
+        <div className="menu-header">
+          <div className="menu-header-logo">
+            <ImgWithFallback src={config.logoUrl} alt="logo" fallbackEmoji="🍕"
+              style={{ width: 42, height: 42, borderRadius: "50%", objectFit: "cover" }} />
+          </div>
+          <div className="menu-header-info">
+            <div className="menu-header-name">{config.negocio}</div>
+          </div>
+        </div>
+
+        <div className="confirm-box">
+          <div className="confirm-emoji">🎉</div>
+          <div className="confirm-title">¡Pedido recibido!</div>
+          <div className="confirm-num-label">Tu número de pedido</div>
+          <div className="confirm-num">#{padOrder(orderResult.orderNumber)}</div>
+          <div className="confirm-sub">
+            Te contactamos al <strong>{form.telefono}</strong> cuando esté listo.
+          </div>
+          <div className="confirm-items">
+            {cartItems.map((i, idx) => (
+              <div key={idx} className="confirm-item">
+                <span>• {i.qty > 1 ? `${i.qty}x ` : ""}{i.name}</span>
+                <span>{fmt(i.price * i.qty)}</span>
+              </div>
+            ))}
+            <div className="confirm-total">
+              <span>Total pagado</span>
+              <span>{fmt(cartTotal)}</span>
+            </div>
+          </div>
+          <button className="btn-primary" onClick={onReset}>Hacer otro pedido</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── MenuPage principal ────────────────────────────────────────────────────────
 export default function MenuPage() {
-  const { sizes, categories, products, config, createOrder } = useApp();
-  const [activeTab, setActiveTab]   = useState(null);
-  const [cartItems, setCartItems]   = useState([]);
-  const [showCart, setShowCart]     = useState(false);
-  const [form, setForm]             = useState({ nombre: "", direccion: "", telefono: "", pago: "", nota: "" });
-  const [submitted, setSubmitted]   = useState(false);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState("");
+  const { sizes, categories, products, variants, config, createOrder } = useApp();
 
-  const currentCat = activeTab || categories[0]?.id;
+  const [activeTab, setActiveTab]       = useState(null);
+  const [cartItems, setCartItems]       = useState([]);
+  const [showCart, setShowCart]         = useState(false);
+  const [showPizzaModal, setShowPizzaModal] = useState(false);
+  const [variantModal, setVariantModal] = useState(null);
+  const [submitted, setSubmitted]       = useState(false);
+  const [orderResult, setOrderResult]   = useState(null);
+  const [lastForm, setLastForm]         = useState({});
+  const [loading, setLoading]           = useState(false);
+
+  const currentCat      = activeTab || categories[0]?.id;
   const currentCategory = categories.find(c => c.id === currentCat);
-  const catProducts = products.filter(p => p.categoryId === currentCat);
-  const pizzaFlavors = products.filter(p => p.categoryId === "pizzas");
+  const catProducts     = products.filter(p => p.categoryId === currentCat && p.active !== false);
+  const pizzaFlavors    = products.filter(p => p.categoryId === "pizzas" && p.active !== false);
+  const cartCount       = cartItems.reduce((sum, i) => sum + i.qty, 0);
+  const cartSubtotal    = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0);
+  const cartTotal       = cartSubtotal + (config.domicilio || 0);
 
-  const cartTotal = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0) + (config.domicilio || 3000);
-  const cartCount = cartItems.reduce((sum, i) => sum + i.qty, 0);
+  // Emoji de la categoría activa como fallback
+  const catEmoji = currentCategory?.icon || "🍽️";
 
   function addToCart(item) {
     setCartItems(prev => {
-      // Para productos simples: si ya existe, suma cantidad
       const existing = prev.find(i => i.name === item.name && item.categoryId !== "pizzas");
       if (existing) return prev.map(i => i.name === item.name ? { ...i, qty: i.qty + item.qty } : i);
       return [...prev, item];
     });
-    setShowCart(true);
+    setVariantModal(null);
+    setShowPizzaModal(false);
   }
 
   function removeFromCart(id) { setCartItems(prev => prev.filter(i => i.id !== id)); }
-
   function changeQty(id, qty) {
     if (qty <= 0) removeFromCart(id);
     else setCartItems(prev => prev.map(i => i.id === id ? { ...i, qty } : i));
   }
 
-  async function handleSubmit() {
-    if (cartItems.length === 0) { setError("Agrega al menos un producto"); return; }
-    if (!form.nombre || !form.direccion || !form.telefono || !form.pago) { setError("Completa todos los campos"); return; }
-    setError(""); setLoading(true);
+  function handleProductClick(product) {
+    const applicable = variants.filter(v =>
+      v.active !== false &&
+      v.categoryId === product.categoryId &&
+      (v.productId === product.id || v.productId === null)
+    );
+    if (applicable.length > 0) {
+      setVariantModal(product);
+    } else {
+      addToCart({
+        id: `${product.id}-${Date.now()}`,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        qty: 1,
+        categoryId: product.categoryId,
+      });
+    }
+  }
+
+  async function handleSubmitOrder(form, total) {
+    setLoading(true);
     const resumen = cartItems.map(i => `${i.qty > 1 ? i.qty + "x " : ""}${i.name}`).join(", ");
-    await createOrder({
+    const result = await createOrder({
       producto: resumen,
       items: cartItems,
-      ingredientes: cartItems.map(i => i.description).join(" | "),
+      ingredientes: cartItems.map(i => i.description).filter(Boolean).join(" | "),
       nota: form.nota,
       cliente: form.nombre,
       direccion: form.direccion,
       telefono: form.telefono,
       pago: form.pago,
-      total: cartTotal,
+      total,
     });
+    setLastForm(form);
+    setOrderResult(result);
     setLoading(false);
+    setShowCart(false);
     setSubmitted(true);
   }
 
   function reset() {
     setCartItems([]); setShowCart(false);
-    setForm({ nombre: "", direccion: "", telefono: "", pago: "", nota: "" });
-    setSubmitted(false);
+    setSubmitted(false); setOrderResult(null);
+    setLastForm({});
   }
 
-  if (submitted) return (
-    <div className="page">
-      <div className="brand-bar">
-        <span className="brand-logo">🍕</span>
-        <div><div className="brand-name">Megga's Pizza</div><div className="brand-sub">Exquisita · Salsa 100% artesanal</div></div>
-      </div>
-      <div className="success-box">
-        <div className="success-icon">🎉</div>
-        <div className="success-title">¡Pedido recibido!</div>
-        <div className="success-sub">Ya está en cocina. Te contactamos al <strong>{form.telefono}</strong> cuando esté listo.</div>
-        <div style={{ background: "#f7f7f7", borderRadius: 10, padding: "10px 14px", marginBottom: "1rem", textAlign: "left" }}>
-          {cartItems.map((i, idx) => (
-            <div key={idx} style={{ fontSize: 13, marginBottom: 3 }}>• {i.qty > 1 ? `${i.qty}x ` : ""}{i.name}</div>
-          ))}
-          <div style={{ fontWeight: 700, color: "#C0000A", marginTop: 6, fontSize: 14 }}>Total: {fmt(cartTotal)}</div>
-        </div>
-        <button className="btn-primary" style={{ maxWidth: 220, display: "inline-block" }} onClick={reset}>Hacer otro pedido</button>
-      </div>
-    </div>
-  );
+  // ── Confirmación ──────────────────────────────────────────────────────────
+  if (submitted && orderResult) {
+    return (
+      <ConfirmScreen
+        orderResult={orderResult}
+        cartItems={cartItems}
+        cartTotal={cartTotal}
+        form={lastForm}
+        config={config}
+        onReset={reset}
+      />
+    );
+  }
 
   return (
-    <div className="page">
-      {/* Header */}
-      <div className="brand-bar">
-        <span className="brand-logo">🍕</span>
-        <div style={{ flex: 1 }}>
-          <div className="brand-name">Megga's Pizza</div>
-          <div className="brand-sub">Exquisita · Salsa 100% artesanal</div>
-        </div>
-        {/* Botón carrito */}
-        {cartCount > 0 && (
-          <button onClick={() => setShowCart(!showCart)} style={{ background: "#FFE600", border: "none", borderRadius: 10, padding: "6px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#C0000A", display: "flex", alignItems: "center", gap: 6 }}>
-            🛒 {cartCount} · {fmt(cartTotal)}
-          </button>
-        )}
-      </div>
+    <div className="menu-bg">
+      <div className="menu-page">
 
-      {/* Carrito expandible */}
-      {showCart && cartItems.length > 0 && (
-        <div style={{ background: "#fff", border: "1px solid #eee", borderRadius: 12, padding: "14px", marginBottom: "1rem" }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10, display: "flex", justifyContent: "space-between" }}>
-            🛒 Tu pedido
-            <button onClick={() => setShowCart(false)} style={{ border: "none", background: "none", cursor: "pointer", color: "#999", fontSize: 16 }}>✕</button>
+        {/* ── Header ─────────────────────────────────────────────────── */}
+        <div className="menu-header">
+          <div className="menu-header-logo">
+            <ImgWithFallback
+              src={config.logoUrl}
+              alt="logo"
+              fallbackEmoji="🍕"
+              style={{ width: 42, height: 42, borderRadius: "50%", objectFit: "cover" }}
+            />
           </div>
-          <Cart items={cartItems} onRemove={removeFromCart} onChangeQty={changeQty} domicilio={config.domicilio || 3000} />
+          <div className="menu-header-info">
+            <div className="menu-header-name">{config.negocio}</div>
+            <div className="menu-header-sub">Exquisita · Salsa 100% artesanal</div>
+          </div>
+          <div className="menu-header-actions">
+            {cartCount > 0 && (
+              <button className="header-cart-btn" onClick={() => setShowCart(true)}>
+                🛒
+                <span className="header-cart-badge">{cartCount}</span>
+              </button>
+            )}
+          </div>
         </div>
-      )}
 
-      {/* Tabs de categorías */}
-      <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginBottom: "1rem" }}>
-        {categories.map(cat => (
-          <button key={cat.id}
-            onClick={() => setActiveTab(cat.id)}
-            style={{
-              flexShrink: 0, padding: "8px 16px",
-              border: `1.5px solid ${currentCat === cat.id ? "#C0000A" : "#eee"}`,
-              borderRadius: 20, background: currentCat === cat.id ? "#C0000A" : "#fff",
-              color: currentCat === cat.id ? "#FFE600" : "#666",
-              fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
-              whiteSpace: "nowrap"
-            }}
-          >
-            {cat.icon} {cat.name}
-          </button>
-        ))}
-      </div>
+        {/* ── Categorías (círculos) ──────────────────────────────────── */}
+        <div className="cat-strip">
+          {categories.map(cat => (
+            <button key={cat.id} className={`cat-item${currentCat === cat.id ? " active" : ""}`}
+              onClick={() => setActiveTab(cat.id)}>
+              <div className="cat-circle">
+                <ImgWithFallback
+                  src={cat.imageUrl}
+                  alt={cat.name}
+                  fallbackEmoji={cat.icon}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+                />
+              </div>
+              <span className="cat-label">{cat.name}</span>
+            </button>
+          ))}
+        </div>
 
-      {/* Contenido de la categoría */}
-      {currentCategory?.type === "pizza" ? (
-        <PizzaSelector sizes={sizes} flavors={pizzaFlavors} onAdd={addToCart} />
-      ) : (
-        <SimpleProducts products={catProducts} onAdd={addToCart} />
-      )}
+        <div className="menu-divider" />
 
-      {/* Formulario de datos */}
-      {cartItems.length > 0 && (
-        <>
-          <div style={{ height: 1, background: "#eee", margin: "1.25rem 0" }} />
-          <div className="section-label">Datos del domicilio</div>
-          <div className="form-row full"><div className="form-group"><label>Nombre *</label><input value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Tu nombre" /></div></div>
-          <div className="form-row full"><div className="form-group"><label>Dirección *</label><input value={form.direccion} onChange={e => setForm({ ...form, direccion: e.target.value })} placeholder="Barrio, calle y número" /></div></div>
-          <div className="form-row">
-            <div className="form-group"><label>Teléfono *</label><input value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="310 000 0000" /></div>
-            <div className="form-group"><label>Pago *</label>
-              <select value={form.pago} onChange={e => setForm({ ...form, pago: e.target.value })}>
-                <option value="">Seleccionar</option>
-                <option>Efectivo</option><option>Nequi</option><option>Daviplata</option><option>Tarjeta</option>
-              </select>
+        {/* ── Lista de productos ────────────────────────────────────── */}
+        <div className="products-list">
+          {currentCategory?.type === "pizza" ? (
+            /* Para pizzas: un solo botón que abre el modal */
+            <div className="pizza-entry-card" onClick={() => setShowPizzaModal(true)}>
+              <div className="pizza-entry-info">
+                <div className="prod-name">Elige tu Pizza 🍕</div>
+                <div className="prod-desc">Selecciona tamaño, sabor y personaliza a tu gusto</div>
+                <div className="prod-price">Desde {fmt(Math.min(...sizes.map(s => s.price)))}</div>
+              </div>
+              <div className="prod-img-wrap">
+                <ImgWithFallback
+                  src={currentCategory?.imageUrl}
+                  alt="Pizza"
+                  fallbackEmoji="🍕"
+                  className="prod-img"
+                />
+                <button className="prod-add-btn" onClick={e => { e.stopPropagation(); setShowPizzaModal(true); }}>+</button>
+              </div>
             </div>
-          </div>
-          <div className="form-row full"><div className="form-group"><label>Nota (opcional)</label><input value={form.nota} onChange={e => setForm({ ...form, nota: e.target.value })} placeholder="Sin cebolla, extra queso..." /></div></div>
-          {error && <div className="toast" style={{ marginBottom: "0.75rem" }}>⚠️ {error}</div>}
-          <button className="btn-primary" onClick={handleSubmit} disabled={loading}>
-            {loading ? "Enviando..." : `🍕 Enviar pedido · ${fmt(cartTotal)}`}
-          </button>
-        </>
+          ) : (
+            catProducts.map(p => (
+              <div key={p.id} className="prod-card">
+                <div className="prod-info">
+                  <div className="prod-name">{p.name}</div>
+                  <div className="prod-desc">{p.description}</div>
+                  <div className="prod-price">{fmt(p.price)}</div>
+                </div>
+                <div className="prod-img-wrap">
+                  <ImgWithFallback
+                    src={p.imageUrl}
+                    alt={p.name}
+                    fallbackEmoji={catEmoji}
+                    className="prod-img"
+                  />
+                  <button className="prod-add-btn" onClick={() => handleProductClick(p)}>+</button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Espaciado para el FAB */}
+        <div style={{ height: 90 }} />
+      </div>
+
+      {/* ── FAB carrito flotante ───────────────────────────────────── */}
+      {cartCount > 0 && (
+        <div className="cart-fab" onClick={() => setShowCart(true)}>
+          <span className="cart-fab-count">{cartCount} {cartCount === 1 ? "producto" : "productos"} seleccionado{cartCount > 1 ? "s" : ""}</span>
+          <span className="cart-fab-right">
+            Ver Carrito 🛒 &nbsp; {fmt(cartSubtotal)}
+          </span>
+        </div>
       )}
 
-      <div style={{ textAlign: "center", marginTop: "1rem", fontSize: 12, color: "#999" }}>
-        Domicilios al {config.telefono}
-      </div>
+      {/* ── Modales ───────────────────────────────────────────────── */}
+      {showPizzaModal && (
+        <PizzaModal
+          sizes={sizes}
+          flavors={pizzaFlavors}
+          onAdd={addToCart}
+          onClose={() => setShowPizzaModal(false)}
+        />
+      )}
+
+      {variantModal && (
+        <VariantModal
+          product={variantModal}
+          variants={variants}
+          onConfirm={item => { addToCart(item); setVariantModal(null); }}
+          onClose={() => setVariantModal(null)}
+        />
+      )}
+
+      {showCart && cartItems.length > 0 && (
+        <CartSheet
+          items={cartItems}
+          onRemove={removeFromCart}
+          onChangeQty={changeQty}
+          domicilio={config.domicilio || 0}
+          config={config}
+          onSubmit={handleSubmitOrder}
+          loading={loading}
+          onClose={() => setShowCart(false)}
+        />
+      )}
     </div>
   );
 }
-

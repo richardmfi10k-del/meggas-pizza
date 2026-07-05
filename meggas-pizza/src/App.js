@@ -10,7 +10,7 @@ import AdminPage from "./pages/AdminPage";
 import "./index.css";
 
 // ── Versión de la app — cambia este número cada vez que hagas un deploy importante
-const APP_VERSION = "2.1";
+const APP_VERSION = "2.2";
 
 // ── Guard para proteger la pantalla de cocina ──
 function KitchenGuard() {

@@ -1,5 +1,4 @@
-// src/defaultData.js
-// VERSIÓN 2 — Sistema de categorías y productos
+// src/defaultData.js — Megga's Pizza (menú real + variantes del demo)
 
 export const defaultCategories = [
   { id: "pizzas",       name: "Pizzas",       icon: "🍕", type: "pizza",  order: 1, active: true },
@@ -51,10 +50,94 @@ export const defaultSizes = [
   { id: "por", label: "Porción",  porciones: "1 porción",    price: 5500,  allowHalf: false, order: 4 },
 ];
 
+export const defaultVariants = [
+  {
+    id: "var-bebida-sabor",
+    categoryId: "bebidas",
+    productId: "beb-gaseosa",
+    label: "Sabor",
+    required: true,
+    active: true,
+    options: [
+      { id: "opt-coca",       label: "Coca-Cola",   active: true },
+      { id: "opt-sprite",     label: "Sprite",      active: true },
+      { id: "opt-manzana",    label: "Manzana",     active: true },
+      { id: "opt-colombiana", label: "Colombiana",  active: true },
+    ],
+  },
+  {
+    id: "var-jugo-sabor",
+    categoryId: "bebidas",
+    productId: "beb-jugo",
+    label: "Sabor del jugo",
+    required: true,
+    active: true,
+    options: [
+      { id: "opt-lulo",     label: "Lulo",     active: true },
+      { id: "opt-maracuya", label: "Maracuyá", active: true },
+      { id: "opt-mango",    label: "Mango",    active: true },
+    ],
+  },
+  {
+    id: "var-agua-gas",
+    categoryId: "bebidas",
+    productId: "beb-agua",
+    label: "Tipo",
+    required: true,
+    active: true,
+    options: [
+      { id: "opt-agua-sin", label: "Sin gas", active: true },
+      { id: "opt-agua-con", label: "Con gas", active: true },
+    ],
+  },
+  {
+    id: "var-cerveza-marca",
+    categoryId: "bebidas",
+    productId: "beb-cerveza",
+    label: "Marca",
+    required: true,
+    active: true,
+    options: [
+      { id: "opt-aguila", label: "Águila",       active: true },
+      { id: "opt-club",   label: "Club Colombia", active: true },
+    ],
+  },
+  {
+    id: "var-hamburguesa-termino",
+    categoryId: "hamburguesas",
+    productId: null,
+    label: "Término de la carne",
+    required: false,
+    active: true,
+    options: [
+      { id: "opt-medio",    label: "Término medio", active: true },
+      { id: "opt-3cuartos", label: "3/4",           active: true },
+      { id: "opt-bien",     label: "Bien cocida",   active: true },
+    ],
+  },
+  {
+    id: "var-salchipapa-salsas",
+    categoryId: "salchipapas",
+    productId: null,
+    label: "Salsas",
+    required: false,
+    active: true,
+    options: [
+      { id: "opt-ketchup", label: "Kétchup",      active: true },
+      { id: "opt-mostaza", label: "Mostaza",      active: true },
+      { id: "opt-mayo",    label: "Mayonesa",     active: true },
+      { id: "opt-rosada",  label: "Salsa rosada", active: true },
+      { id: "opt-bbq-s",   label: "BBQ",          active: true },
+      { id: "opt-pico",    label: "Picante",      active: true },
+    ],
+  },
+];
+
 export const defaultConfig = {
-  negocio: "Megga's Pizza",
-  telefono: "310 578 05 03",
-  domicilio: 3000,
-  adminPassword: "meggas2024",
+  negocio:          "Megga's Pizza",
+  telefono:         "310 578 05 03",
+  domicilio:        3000,
+  adminPassword:    "meggas2024",
+  kitchenPassword:  "",
   mensaje_whatsapp: "Hola 👋 Bienvenido a Megga's Pizza. Haz tu pedido aquí 🍕",
 };
