@@ -372,8 +372,8 @@ body {
 }
 .menu-header-logo img,
 .menu-header-logo > div {
-  width: 62px;
-  height: 62px;
+  width: 84px;
+  height: 84px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
