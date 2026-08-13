@@ -299,9 +299,19 @@ body {
   }
 }
 
+@media print {
+  body * { visibility: hidden; }
+  #ticket-print, #ticket-print * { visibility: visible; }
+  #ticket-print {
+    position: fixed;
+    left: 0; top: 0;
+    width: 100%;
+  }
+}
+
 /* Tirilla térmica — 80mm */
 .ticket-thermal {
-  width: 300px;
+  width: 72mm; /* 80mm de papel menos ~4mm de margen a cada lado */
   font-family: 'Courier New', monospace;
   font-size: 12px;
   color: #000;
@@ -309,12 +319,13 @@ body {
   padding: 10px 8px;
   line-height: 1.5;
 }
+.ticket-thermal.ticket-thermal-58 {
+  width: 46mm; /* 58mm de papel menos margen — la letra más pequeña la
+                  controla el propio componente, esto solo fija el ancho real */
+}
 .ticket-thermal .t-center { text-align: center; }
 .ticket-thermal .t-bold   { font-weight: bold; }
-.ticket-thermal .t-big    { font-size: 16px; font-weight: bold; }
-.ticket-thermal .t-line   { border-top: 1px dashed #000; margin: 6px 0; }
-.ticket-thermal .t-row    { display: flex; justify-content: space-between; }
-
+.ticket-thermal .t-big    { font-size:
 /* Hoja carta */
 .ticket-letter {
   width: 100%;
