@@ -310,48 +310,32 @@ body {
 }
 
 /* Tirilla térmica — 80mm */
-.ticket-thermal {
-  width: 72mm; /* 80mm de papel menos ~4mm de margen a cada lado */
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
-  color: #000;
-  background: #fff;
-  padding: 10px 8px;
-  line-height: 1.5;
+@media print {
+  body * { visibility: hidden; }
+  #ticket-print, #ticket-print * { visibility: visible; }
+  
+  #ticket-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center; /* Centra horizontalmente para que la escala crezca simétrica */
+    
+    /* Evita las páginas múltiples o en blanco hacia abajo */
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Evita que los elementos fuercen saltos de página raros */
+  .ticket-thermal {
+    page-break-after: avoid;
+    page-break-before: avoid;
+    break-after: avoid;
+    break-before: avoid;
+  }
 }
-.ticket-thermal.ticket-thermal-58 {
-  width: 46mm; /* 58mm de papel menos margen — la letra más pequeña la
-                  controla el propio componente, esto solo fija el ancho real */
-}
-.ticket-thermal .t-center { text-align: center; }
-.ticket-thermal .t-bold   { font-weight: bold; }
-.ticket-thermal .t-big    { font-size:
-/* Hoja carta */
-.ticket-letter {
-  width: 100%;
-  max-width: 520px;
-  font-family: 'Nunito', sans-serif;
-  font-size: 13px;
-  color: #000;
-  background: #fff;
-  padding: 20px;
-}
-.ticket-letter .tl-header {
-  background: #C0000A;
-  color: #FFE600;
-  padding: 14px 18px;
-  border-radius: 10px;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.ticket-letter .tl-title  { font-family: 'Bangers', cursive; font-size: 22px; letter-spacing: 1px; }
-.ticket-letter .tl-sub    { font-size: 11px; opacity: 0.8; }
-.ticket-letter .tl-section { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #666; margin: 12px 0 6px; }
-.ticket-letter .tl-row    { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
-.ticket-letter .tl-total  { font-size: 16px; font-weight: 700; color: #C0000A; border-top: 2px solid #C0000A; padding-top: 8px; margin-top: 6px; }
-.ticket-letter .tl-footer { text-align: center; font-size: 11px; color: #999; margin-top: 16px; }
 /* =============================================
    AGREGAR AL FINAL DE src/index.css
    MEJORA 3 — Rediseño menú estilo Rappi/iFood
