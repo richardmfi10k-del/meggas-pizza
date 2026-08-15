@@ -288,12 +288,19 @@ body {
 }
 .btn-print:hover { background: var(--gray-100); border-color: var(--black); color: var(--black); }
 
-/* Tirilla térmica — Bloque Único de Impresión */
+/* Tirilla térmica — Bloque Único con Corrección de Escala */
 @media print {
+  @page {
+    size: auto;
+    margin: 0mm; /* Elimina los márgenes físicos de la página de impresión */
+  }
+
   body, html {
     height: auto !important;
     min-height: 0 !important;
     background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
   
   body * { visibility: hidden; }
@@ -305,22 +312,22 @@ body {
     top: 0;
     width: 100%;
     display: flex;
-    justify-content: center; /* Centra horizontalmente para que la escala crezca simétrica */
+    justify-content: center;
     
-    /* Evita las páginas múltiples o en blanco hacia abajo */
+    /* Forzamos altura automática sin límite para que la escala del 150% quepa sin romper */
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;
   }
 
-  /* Evita que los elementos fuercen saltos de página */
+  /* Evita saltos internos y externos */
   .ticket-thermal {
-    page-break-after: avoid;
-    page-break-before: avoid;
-    break-after: avoid;
-    break-before: avoid;
-    page-break-inside: avoid;
-    break-inside: avoid;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    page-break-inside: avoid !important;
+    break-after: avoid !important;
+    break-before: avoid !important;
+    break-inside: avoid !important;
   }
 }
 /* =============================================
