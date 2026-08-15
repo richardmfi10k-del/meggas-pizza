@@ -290,6 +290,12 @@ body {
 
 /* Tirilla térmica — Bloque Único de Impresión */
 @media print {
+  body, html {
+    height: auto !important;
+    min-height: 0 !important;
+    background: white !important;
+  }
+  
   body * { visibility: hidden; }
   #ticket-print, #ticket-print * { visibility: visible; }
   
