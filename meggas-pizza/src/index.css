@@ -288,28 +288,7 @@ body {
 }
 .btn-print:hover { background: var(--gray-100); border-color: var(--black); color: var(--black); }
 
-/* ── Tiquete de impresión ── */
-@media print {
-  body * { visibility: hidden; }
-  #ticket-print, #ticket-print * { visibility: visible; }
-  #ticket-print {
-    position: fixed;
-    left: 0; top: 0;
-    width: 100%;
-  }
-}
-
-@media print {
-  body * { visibility: hidden; }
-  #ticket-print, #ticket-print * { visibility: visible; }
-  #ticket-print {
-    position: fixed;
-    left: 0; top: 0;
-    width: 100%;
-  }
-}
-
-/* Tirilla térmica — 80mm */
+/* Tirilla térmica — Bloque Único de Impresión */
 @media print {
   body * { visibility: hidden; }
   #ticket-print, #ticket-print * { visibility: visible; }
@@ -328,12 +307,14 @@ body {
     overflow: visible !important;
   }
 
-  /* Evita que los elementos fuercen saltos de página raros */
+  /* Evita que los elementos fuercen saltos de página */
   .ticket-thermal {
     page-break-after: avoid;
     page-break-before: avoid;
     break-after: avoid;
     break-before: avoid;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 }
 /* =============================================
