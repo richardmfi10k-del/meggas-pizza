@@ -291,8 +291,8 @@ body {
 /* Tirilla térmica — Bloque Único con Corrección de Escala */
 @media print {
   @page {
-    size: auto;
-    margin: 0mm; /* Elimina los márgenes físicos de la página de impresión */
+    size: 58mm auto;
+    margin: 0mm;
   }
 
   body, html {
@@ -302,23 +302,28 @@ body {
     margin: 0 !important;
     padding: 0 !important;
   }
-  
+
   body * { visibility: hidden; }
   #ticket-print, #ticket-print * { visibility: visible; }
-  
+
   #ticket-print {
-    position: absolute;
+    position: fixed;
     left: 0;
     top: 0;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    
-    /* Forzamos altura automática sin límite para que la escala del 150% quepa sin romper */
-    height: auto !important;
-    max-height: none !important;
-    overflow: visible !important;
+    width: 58mm;
   }
+
+  .ticket-thermal {
+    width: 58mm !important;
+    font-size: 13pt !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    page-break-inside: avoid !important;
+    break-after: avoid !important;
+    break-before: avoid !important;
+    break-inside: avoid !important;
+  }
+}
 
   /* Evita saltos internos y externos */
   .ticket-thermal {
